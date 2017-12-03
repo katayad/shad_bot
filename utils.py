@@ -11,7 +11,7 @@ cities_list = json.load(open("data/city.list.min.json", "r"))
 cities = []
 for city in cities_list:
     cities.append(city["name"].lower())
-print(difflib.get_close_matches("verhnyaya salda", cities))
+print(difflib.get_close_matches("st. petersburg", cities))
 
 def text2int(textnum, numwords={}):
     try:
@@ -165,6 +165,7 @@ def clean(text):
     return text.strip()
 
 def get_city(text):
+    text = text.replace("st.", "saint")
     return difflib.get_close_matches(text, cities)[0]
 
 if __name__ == "__main__":
