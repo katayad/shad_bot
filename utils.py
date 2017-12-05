@@ -68,7 +68,7 @@ this_week = re.compile(r'(this|on the|in the|during the|for a|for the|for one) w
 next_week = re.compile(r'(for)?(the next|next) week')
 for_n_weeks = re.compile(r'(for|in)?\s*(\w+)\s*week?( in advance)?')
 
-for_n_days = re.compile(r'(for |in the next |next )?(\w+) day(s|time)')
+for_n_days = re.compile(r'(for |in the next |next )?(\w+) day(s|time)?')
 for_n_days2 = re.compile(r'(\w+)-day')
 on_day = re.compile(r'(on )?(a )?(%s)(\'s)?' % days)
 
@@ -81,47 +81,56 @@ def get_period(text):
     text = text.lower()
     res = aftertommorrow.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (2, 3)
+        print("aftertommorrow")
+        return (res.start(), res.end()), (2, 3)
     res = tommorrow.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (1, 2)
+        print("tommorrow")
+        return (res.start(), res.end()), (1, 2)
     res = today.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (0, 1)
+        print("today")
+        return (res.start(), res.end()), (0, 1)
     res = current.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (0, 1)
+        print("current")
+        return (res.start(), res.end()), (0, 1)
 
     res = on_day.search(text)
     if (res):
+        print("")
         delta = (day_num[res.group(3)] - datetime.datetime.today().weekday() + 7) % 7
-        return text[:res.start()] + text[res.end():], (delta, delta + 1)
+        return (res.start(), res.end()), (delta, delta + 1)
 
     res = for_n_days.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (1, text2int(res.group(2)) + 1)
+        print("for_n_days")
+        return (res.start(), res.end()), (1, text2int(res.group(2)) + 1)
 
     res = for_n_days2.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (1, text2int(res.group(1)) + 1)
+        print("for_n_days2")
+        return (res.start(), res.end()), (1, text2int(res.group(1)) + 1)
 
     res = this_week.search(text)
     if (res):
-        return text[:res.start()] + text[res.end():], (1, 8)
+        print("this_week")
+        return (res.start(), res.end()), (1, 8)
 
     res = next_week.search(text)
     if (res):
-            return text[:res.start()] + text[res.end():], (7 - datetime.datetime.today().weekday(), 7 - datetime.datetime.today().weekday() + 7)
+        print("next_week")
+        return (res.start(), res.end()), (7 - datetime.datetime.today().weekday(), 7 - datetime.datetime.today().weekday() + 7)
 
     res = for_n_weeks.search(text)
     if (res):
-        print(res.group(3))
+        print("for_n_weeks")
         if res.group(3) == "":
-            return text[:res.start()] + text[res.end():], (16, 13)
-        return text[:res.start()] + text[res.end():], (1, text2int(res.group(3)) * 7 + 1)
+            return (res.start(), res.end()), (16, 13)
+        return (res.start(), res.end()), (1, text2int(res.group(3)) * 7 + 1)
 
 
-    return text, (0, 1)
+    return (-1, -1), (0, 1)
 
 def translate(to, txt):
     hash_key = 'trnsl.1.1.20171116T145421Z.f3e43b7ad850d650.c614c9dc7e87b4fd7e547042cd517da9f20575a4'
@@ -168,8 +177,9 @@ def recognise_audio(audio_path):
 def clean(text):
     print(text)
     clean_words = [
-        " what ", " will ", " be ", " weather ", " temperature ", "temperatures", " temp ", " heat ", " prognosis ", " forecast ",
-        " in ", " a ", " is ", " the ", " what's ", " like ", " how's ", ",",
+        "forecast-weather", " what ", " will ", " be ", " weather ", " temperature ",
+        "temperatures", " temp ", " heat ", " prognosis ", " forecast ", " in ",
+        " a ", " is ", " the ", " what's ", " like ", " how's ", ",", "!", "?", ".", ";"
     ]
     text = " " + text + " "
     for word in clean_words:
@@ -183,6 +193,7 @@ def get_city(text):
         print("GOT GEO!")
         return geo.cities[0].lower()
     text = clean(text.lower())
+    print("getting city form: ", text)
     return difflib.get_close_matches(text, cities)[0]
 
 def BingWebSearch(search):
@@ -201,7 +212,7 @@ def BingWebSearch(search):
     return response.read().decode("utf8")
 
 def GetImage(city, desc):
-    print(city + " " + desc + " jpeg jpg")
+    print(city + " " + desc)
     res = json.loads(requests.get(
         "https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&searchType=image" %
         (config.google_tocken, config.google_cx, "город " + city + " " + desc)
@@ -263,4 +274,5 @@ def GetPoem(query):
 if __name__ == "__main__":
     #print(get_period("what is the weather in San Francisco in next 2 weeks"))
     #pprint(GetPoem("дождик"))
-    print(difflib.get_close_matches("st. petersburg", cities))
+    #print(difflib.get_close_matches("st. petersburg", cities))
+    print(get_period("3 day forecast in Moscow"))

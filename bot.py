@@ -42,10 +42,48 @@ def handle(msg):
             return
     else:
         text = msg["text"]
+
+
+    if (text == "/start"):
+        print(msg["text"])
+        return
+    if (text == "/help"):
+        bot.sendMessage(msg["chat"]["id"],
+"""
+Спросите у бота погоду. Помимо погоды бот постарается найдти картинку города стшок по погоде.
+
+В запросе должен прсутствовать город, погода которого вас интересует.
+
+Можете указать временной период. Если бот не поймет, о каком времени его спрашивают, он покажет текущую погоду.
+
+Примеры поддерживаемых запросов:
+
+- Москва
+- Погода в Москве
+- Какая завтра погода в Москве
+- Что будет в Москве послезавтра
+- Какая температура завтра в Москве
+- Трехдневный прогноз погоды в Москве
+- Погода в Москве на 4 дня
+- Погода в Москве на 4 дня вперед
+- Погода в Москве в четверг
+
+Формат +/- вольный, но не забывайте, что это всего лишь бот ;)
+
+!!!
+Если пользуетесь android смартфоном, можете послать аудио сообщение, бот постарается его распознать.
+!!!
+"""
+)
+        return
+
+
     print(text)
     text = translate("en", text)
     print(text)
-    text, period = get_period(text)
+    to_del, period = get_period(text)
+    if (to_del != (-1, -1)) :
+        text = text[:to_del[0]] + text[to_del[1]:]
     if (period[0] >= 6 or period[1] >= 7):
         bot.sendMessage(msg["chat"]["id"],"хз")
         time.sleep(1)
@@ -63,28 +101,35 @@ def handle(msg):
 
     week_day = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     print(days)
+    ans = ""
     for day in days:
         print(day["dt"])
         date = datetime.datetime.utcfromtimestamp(int(day["dt"]))
         #print(date.strftime('%Y-%m-%dT%H:%M:%SZ'))
         #print(date.weekday())
-        bot.sendMessage(
-            msg["chat"]["id"],
-            "%s(%s)\n    %s°C, %s" % (
-                week_day[date.weekday()],
-                date.strftime('%m-%d'),
-                day["main"]["temp"],
-                day["weather"][0]["description"]
-            )
+        ans += "%s(%s)\n    %s°C, %s\n" % (
+            week_day[date.weekday()],
+            date.strftime('%m-%d'),
+            day["main"]["temp"],
+            day["weather"][0]["description"]
         )
-
-    bot.sendPhoto(msg["chat"]["id"], GetImage(city_ru, get_query_by_desc_id(days[0]["weather"][0]["id"]) ))
-    bot.sendMessage(msg["chat"]["id"], GetPoem(get_query_by_desc_id(days[0]["weather"][0]["id"])))
-
-print ('Listening ...')
-while 1:
+    poem = "\n\n"
     try:
-        MessageLoop(bot, handle).run_forever()
+        poem += GetPoem(get_query_by_desc_id(days[0]["weather"][0]["id"]))
     except:
         pass
+
+    try:
+        img = GetImage(city_ru, get_query_by_desc_id(days[0]["weather"][0]["id"]) )
+        bot.sendPhoto(msg["chat"]["id"], img, caption = ans + poem)
+    except:
+        bot.sendMessage(msg["chat"]["id"], ans + poem)
+
+#MessageLoop(bot, handle).run_as_thread(relax=2.0)
+
+while 1:
+    try:
+        MessageLoop(bot, handle).run_forever(relax=2.0)
+    except:
+        print ('Restarting ...')
     time.sleep(10)
