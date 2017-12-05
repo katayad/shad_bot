@@ -6,12 +6,17 @@ import config
 import json
 import xml.etree.ElementTree as etree
 import difflib
+import urllib.request
+import http.client, urllib.parse
+import random
+from pprint import pprint
+from geotext import GeoText
 
 cities_list = json.load(open("data/city.list.min.json", "r"))
 cities = []
 for city in cities_list:
     cities.append(city["name"].lower())
-print(difflib.get_close_matches("st. petersburg", cities))
+
 
 def text2int(textnum, numwords={}):
     try:
@@ -63,7 +68,8 @@ this_week = re.compile(r'(this|on the|in the|during the|for a|for the|for one) w
 next_week = re.compile(r'(for)?(the next|next) week')
 for_n_weeks = re.compile(r'(for|in)?\s*(\w+)\s*week?( in advance)?')
 
-for_n_days = re.compile(r'(for|in the next) (\w+) days')
+for_n_days = re.compile(r'(for |in the next |next )?(\w+) day(s|time)')
+for_n_days2 = re.compile(r'(\w+)-day')
 on_day = re.compile(r'(on )?(a )?(%s)(\'s)?' % days)
 
 
@@ -72,6 +78,7 @@ today = re.compile(r'(for )?today')
 tommorrow = re.compile(r'(for )?(tomorrow|the next day)')
 aftertommorrow = re.compile(r'(for )?(the )?day after tomorrow')
 def get_period(text):
+    text = text.lower()
     res = aftertommorrow.search(text)
     if (res):
         return text[:res.start()] + text[res.end():], (2, 3)
@@ -93,6 +100,10 @@ def get_period(text):
     res = for_n_days.search(text)
     if (res):
         return text[:res.start()] + text[res.end():], (1, text2int(res.group(2)) + 1)
+
+    res = for_n_days2.search(text)
+    if (res):
+        return text[:res.start()] + text[res.end():], (1, text2int(res.group(1)) + 1)
 
     res = this_week.search(text)
     if (res):
@@ -118,13 +129,13 @@ def translate(to, txt):
         "https://translate.yandex.net/api/v1.5/tr.json/translate?lang=%s&key=%s&text=%s" % (to, hash_key, txt)
     )
     #return r.text
-    return json.loads(r.text)["text"][0]
+    return json.loads(r.text)["text"][0].replace("St.", "Saint")
 
 def get_current_weather(city):
     print(city)
     resp = json.loads(
         requests.get(
-            "http://api.openweathermap.org/data/2.5/weather?q=%s&units=metric&lang=ru&APPID=%s" %
+            "http://api.openweathermap.org/data/2.5/weather?q=%s&units=metric&APPID=%s&lang=ru" %
             (city, config.openweather_token)
         ).text
     )
@@ -135,7 +146,7 @@ def get_weather(city, period):
         return get_current_weather(city)
     resp = json.loads(
         requests.get(
-            "http://api.openweathermap.org/data/2.5/forecast?q=%s&units=metric&APPID=%s" %
+            "http://api.openweathermap.org/data/2.5/forecast?q=%s&units=metric&APPID=%s&lang=ru" %
             (city, config.openweather_token)
         ).text
     )
@@ -150,13 +161,14 @@ def recognise_audio(audio_path):
         files=files,
         headers=headers
     )
+    print(r.text)
     tree = etree.fromstring(r.text)
     return [var.text for var in tree.findall('variant')]
 
 def clean(text):
     print(text)
     clean_words = [
-        " what ", " will ", " be ", " weather ", " temperature ", " temp ", " heat ", " prognosis ", " forecast ",
+        " what ", " will ", " be ", " weather ", " temperature ", "temperatures", " temp ", " heat ", " prognosis ", " forecast ",
         " in ", " a ", " is ", " the ", " what's ", " like ", " how's ", ",",
     ]
     text = " " + text + " "
@@ -165,8 +177,90 @@ def clean(text):
     return text.strip()
 
 def get_city(text):
-    text = text.replace("st.", "saint")
+    print("getting city form: ", text)
+    geo = GeoText(text)
+    if (len(geo.cities)):
+        print("GOT GEO!")
+        return geo.cities[0].lower()
+    text = clean(text.lower())
     return difflib.get_close_matches(text, cities)[0]
 
+def BingWebSearch(search):
+    print(search)
+    host = "api.cognitive.microsoft.com"
+    path = "/bing/v7.0/images/search"
+    "Performs a Bing Web search and returns the results."
+
+    headers = {'Ocp-Apim-Subscription-Key': config.bing_token}
+    conn = http.client.HTTPSConnection(host)
+    query = urllib.parse.quote(search)
+    conn.request("GET", path + "?q=" + query, headers=headers)
+    response = conn.getresponse()
+    headers = [k + ": " + v for (k, v) in response.getheaders()
+                   if k.startswith("BingAPIs-") or k.startswith("X-MSEdge-")]
+    return response.read().decode("utf8")
+
+def GetImage(city, desc):
+    print(city + " " + desc + " jpeg jpg")
+    res = json.loads(requests.get(
+        "https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&searchType=image" %
+        (config.google_tocken, config.google_cx, "город " + city + " " + desc)
+    ).text)["items"]
+    #print(res)
+    return res[random.randint(0, len(res))]["link"]
+
+def get_query_by_desc_id(ID):
+    ID = int(ID)
+    if 200 <= ID <= 232:
+        return "гроза|шторм|буря"
+    if 300 <= ID <= 311 or ID == 500:
+        return "моросить|дождик"
+    if 502 <= ID <= 531:
+        return "дождь||дождик"
+    if 600 <= ID <= 602:
+        return "снег|снежек|снежёк"
+    if 611 <= ID <= 616:
+        return "мокрый снег"
+    if 620 <= ID <= 622:
+        return "снегопад"
+    if ID in [741, 701]:
+        return "туман"
+    if ID == 711:
+        return "дымка"
+    if ID in [731, 751, 761]:
+        return "пыль"
+    if ID == 762:
+        return "пепел"
+    if ID == 771:
+        return "шторм|буря"
+    if ID == 781:
+        return "смерч"
+    if ID == 800:
+        return "солнце"
+    if 801 <= ID <= 804:
+        return "облака|облачно"
+    if 900 <= ID <= 902:
+        return "гроза|шторм|буря|ураган"
+    if ID == 903:
+        return "холод|холодно|холодок"
+    if ID == 904:
+        return "жара|жарко"
+    if ID == 905:
+        return "ветер|ветерок|ветренно"
+    if ID == 906:
+        return "град"
+    return "погода"
+
+def GetPoem(query):
+    print(query)
+    res = json.loads(requests.get(
+        "https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s" %
+        (config.google_tocken, config.google_poem_cx, query)
+    ).text)["items"]
+    #print(res)snippet
+    return res[random.randint(0, len(res))]["snippet"]
+
 if __name__ == "__main__":
-    print(get_period("what is the weather in San Francisco in next 2 weeks"))
+    #print(get_period("what is the weather in San Francisco in next 2 weeks"))
+    #pprint(GetPoem("дождик"))
+    print(difflib.get_close_matches("st. petersburg", cities))

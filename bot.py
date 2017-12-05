@@ -8,6 +8,8 @@ import datetime
 from telepot.loop import MessageLoop
 from utils import *
 
+from pprint import pprint
+
 bot = telepot.Bot(config.token)
 bot.getMe()
 
@@ -30,6 +32,7 @@ def get_audio(msg):
 
 def handle(msg):
     if ("voice" in msg) :
+        pprint(msg)
         variants = recognise_audio(get_audio(msg))
 
         if (len(variants)):
@@ -40,18 +43,23 @@ def handle(msg):
     else:
         text = msg["text"]
     print(text)
-    text = translate("en", text).lower()
+    text = translate("en", text)
     print(text)
     text, period = get_period(text)
-    text = clean(text)
+    if (period[0] >= 6 or period[1] >= 7):
+        bot.sendMessage(msg["chat"]["id"],"хз")
+        time.sleep(1)
+        bot.sendMessage(msg["chat"]["id"],"Могу заглянуть лишь на 5 дней вперед..")
+        return
+
     print(text, period)
     city = get_city(text)
     print(city)
-    #get_current_weather(city)
-    days = get_weather(city, period)
 
     city_ru = translate("ru", city)
     bot.sendMessage(msg["chat"]["id"], city_ru)
+
+    days = get_weather(city, period)
 
     week_day = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     print(days)
@@ -62,16 +70,21 @@ def handle(msg):
         #print(date.weekday())
         bot.sendMessage(
             msg["chat"]["id"],
-            "%s(%s)\n    Температура %s°C" % (
+            "%s(%s)\n    %s°C, %s" % (
                 week_day[date.weekday()],
                 date.strftime('%m-%d'),
                 day["main"]["temp"],
+                day["weather"][0]["description"]
             )
         )
-    #bot.sendMessage(msg["chat"]["id"], "%s: %s" % (city, get_current_weather(city)))
 
+    bot.sendPhoto(msg["chat"]["id"], GetImage(city_ru, get_query_by_desc_id(days[0]["weather"][0]["id"]) ))
+    bot.sendMessage(msg["chat"]["id"], GetPoem(get_query_by_desc_id(days[0]["weather"][0]["id"])))
 
-MessageLoop(bot, handle).run_as_thread()
 print ('Listening ...')
 while 1:
+    try:
+        MessageLoop(bot, handle).run_forever()
+    except:
+        pass
     time.sleep(10)
